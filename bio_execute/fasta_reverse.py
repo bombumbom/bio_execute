@@ -21,11 +21,6 @@ record = SeqIO.read(file, "fasta")
 
 rev_rec = record.seq.reverse_complement()
 
-# seq = Seq("ACCGAGACGGCAAAGGCTAGCATAGGTATGAGACTTCCTTCCTGCCAGTGCTGAGGAACTGGGAGCCTAC")
-# feature = SeqFeature(FeatureLocation(5, 18), type="gene", strand=-1)
-# feature_seq0 = seq[feature.location.start:feature.location.end]
-
-# feature_seq = seq[feature.location.start:feature.location.end].reverse_complement()
 f = open(args.p + filename + "_rev.fasta", "w")
 f.write(">%s\n" % record.id)
 f.write(str(rev_rec))
