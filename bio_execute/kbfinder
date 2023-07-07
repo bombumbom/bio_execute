@@ -1,4 +1,4 @@
-#!/home/kbkim/anaconda3/envs/kbbio/bin/python
+#! ~/anaconda3/envs/kbbio/bin/python
 import sys
 import subprocess
 import argparse
@@ -27,7 +27,7 @@ parser.add_argument(
     "-f",
     required=True,
     help="Input File Name",
-)  #! 이유는 모름
+) 
 parser.add_argument("-r", required=True, help="Reference GBK File")
 parser.add_argument(
     "-p", required=True, help="Reference GBK Path for finding gene"
