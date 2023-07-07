@@ -4,7 +4,9 @@ import subprocess
 import argparse
 from Bio import SeqIO
 from colorama import Back, Fore, Style
-import kbncbi as kb
+import kbncbi as kb made by me
+
+#! kbncbi 이용하여 fasta sequence annotation 및 수정 자동화 코드
 
 # * 1. fasta file check fasta_check
 # * 2. 이상이 없으면, mitofinder 돌리기 (arwen 으로 돌리기, 젤 빠름)
