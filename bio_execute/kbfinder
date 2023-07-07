@@ -5,6 +5,7 @@ import argparse
 from Bio import SeqIO
 from colorama import Back, Fore, Style
 import kbncbi as kb made by me
+import kbbarcode as kbar made by me
 
 #! kbncbi 이용하여 fasta sequence annotation 및 수정 자동화 코드
 
