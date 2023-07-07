@@ -15,7 +15,6 @@ print("file or number : %s \n save path : %s" % (args.f, args.p))
 
 
 path = args.f
-# path = "/home/kbkim/NOVOPlasty-master/work/Scol_trim/Scol_trim_K39/Contigs_1_Scol_trim_K39.fasta"
 
 filename = path.split('/')[-1]
 filename = filename.split('.fasta')
