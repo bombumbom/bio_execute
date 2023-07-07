@@ -1,10 +1,12 @@
-#!/home/kbkim/anaconda3/envs/kbbio/bin/python
+#!~/anaconda3/envs/kbbio/bin/python
 import sys
 import subprocess
 import argparse
 from Bio import SeqIO
 from colorama import Back, Fore, Style
-import kbncbi as kb
+import kbncbi as kb #! made by me
+
+#! kbncbi 이용 --> fasta 파일, annotation 및 수정 자동화 프로그램
 
 # * 1. fasta file check fasta_check
 # * 2. 이상이 없으면, mitofinder 돌리기 (arwen 으로 돌리기, 젤 빠름)
