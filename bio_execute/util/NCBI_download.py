@@ -2,7 +2,7 @@
 from Bio import Entrez
 import argparse
 
-Entrez.email = "sacrificek2b@gmail.com"
+Entrez.email = " "
 
 parser = argparse.ArgumentParser(description='NCBI Download')
 parser.add_argument('-a', required=True, help='Access Number or List file')
