@@ -1,0 +1,352 @@
+#!/home/kbkim/anaconda3/envs/kbbio/bin/python
+import sys
+import subprocess
+import argparse
+from Bio import SeqIO
+from colorama import Back, Fore, Style
+import kbncbi as kb
+
+# * 1. fasta file check fasta_check
+# * 2. 이상이 없으면, mitofinder 돌리기 (arwen 으로 돌리기, 젤 빠름)
+# * 3. COX1이 있으면 COX1 시퀀스가 젤 처음으로 오도록 fasta 파일 다시 만들기
+# * 4. 다시 mitofinder 돌리기 (mitfi)
+# * 5. 없는 PCG 찾기 --> ATP8의 경우 COX2 ATP6 사이 값으로 genefinder 돌리기
+# * 6. endcodon 돌리기
+#! 7. start codon 찾기, 숫자가 크면 failed 작으면, 바꾸기
+# *. The END
+
+LOG = []
+#! input
+
+
+parser = argparse.ArgumentParser(description="kb_mito_finder")
+parser.add_argument("-j", required=True, help="Project Name")
+parser.add_argument(
+    "-f",
+    required=True,
+    help="Input File Name",
+)  #! 이유는 모름
+parser.add_argument("-r", required=True, help="Reference GBK File")
+parser.add_argument(
+    "-p", required=True, help="Reference GBK Path for finding gene"
+)
+parser.add_argument(
+    "-t",
+    required=False,
+    default="mitfi",
+    help="tRNA method (mitfi, trnascan, arwen)",
+)
+parser.add_argument(
+    "-c", required=False, default="True", help="fasta sequence check"
+)
+#! parser.add_argument("-c", required=True, default="True", help="fasta sequence check") 230426 변경 required : True --> False
+
+parser.add_argument(
+    "-a", required=False, default="True", help="COI arrangement"
+)
+#! parser.add_argument("-a", required=True, default="True", help="COI arrangement") 230426 변경 required : True --> False
+parser.add_argument(
+    "-g",
+    required=False,
+    default="False",
+    help="Position for finding gene (ex: 111 150)",
+)
+
+args = parser.parse_args()
+print(args.c, args.a)
+
+pn = args.j
+file = args.f
+ref_file = args.r
+ref_path = args.p
+tRNA = args.t
+checkf = args.c
+COI_ar = args.a
+
+LOG.append(f"Project Name : {pn}")
+LOG.append(f"Input File : {file}")
+LOG.append(f"reference  file : {ref_file}")
+LOG.append(f"reference  path : {ref_path}")
+LOG.append(f"COI arrangement : {COI_ar}")
+LOG.append(f"Position for finding gene : {args.g}")
+
+if args.g != "False":
+    uposi = args.g.split(" ")
+    pog0 = int(uposi[0])
+    pog1 = int(uposi[1])
+
+
+# * ref_gbk로 부터 PCGS 순서 찾기, 순서를 COI으로 정렬
+ref_record = SeqIO.read(ref_file, "genbank")
+ref_PCGS = []
+ref_strand = []
+REF_STR = 0
+for feature in ref_record.features:
+    if feature.type == "CDS":
+        genename = feature.qualifiers["gene"][0]
+        genename = kb.gene_name_adjust(genename)
+        ref_PCGS.append(genename)
+        ref_strand.append(feature.strand)
+        if genename == "CO1" and feature.strand == -1:
+            REF_STR = -1
+if REF_STR == -1:
+    ref_PCGS = ref_PCGS[::-1]
+rindex = ref_PCGS.index("CO1")
+r_PCGS0 = ref_PCGS[rindex:]
+r_PCGS1 = ref_PCGS[:rindex]
+ref_PCGS = r_PCGS0 + r_PCGS1
+r_STR0 = ref_strand[rindex:]
+r_STR1 = ref_strand[:rindex]
+ref_strand = r_STR0 + r_STR1
+# ref_PCGS = ['CO1','CO2','ATP8','ATP6','CO3','ND3','ND1','ND5','ND4','ND4L','ND6','CYTB','ND2']
+
+
+path = file.split("/")
+fname = path[-1].split(".")[0]
+path = file.split(fname)[0]
+
+
+# * Step 1. fasta check
+fid, count = kb.fasta_check(file)
+LOG.append(f"{count} error sequence ")
+if checkf == "True":
+    if count != 0:
+        print(
+            Back.LIGHTBLACK_EX
+            + Fore.CYAN
+            + Style.BRIGHT
+            + "이상한 시퀀스 있음, 고쳐야됨"
+            + Style.RESET_ALL
+        )
+        sys.exit()
+elif checkf == "False":
+    print(
+        Back.LIGHTBLACK_EX
+        + Fore.CYAN
+        + Style.BRIGHT
+        + "이상한 시퀀스 무시함"
+        + Style.RESET_ALL
+    )
+
+# * Step 2-3. find COX1, arrange from COX1
+if COI_ar == "True":
+    print(
+        Back.LIGHTBLACK_EX
+        + Fore.BLUE
+        + Style.BRIGHT
+        + "mitofinder 시작 - COX1 정렬 시작 ",
+        Style.RESET_ALL,
+    )
+
+    OUTPUT = subprocess.call(
+        [
+            f"mitofinder -j tmp -a {file} -r {ref_file} -o 5 -p 10 -m 50 -t arwen -n 10"
+        ],
+        shell=True,
+    )
+    TMP_GB_FILE = (
+        "./tmp/tmp_MitoFinder_arwen_Final_Results/tmp_mtDNA_contig.gb"
+    )
+
+    record = SeqIO.read(TMP_GB_FILE, "genbank")
+    seq = record.seq
+    for i, feature in enumerate(record.features):
+        if feature.type == "CDS":
+            genename = feature.qualifiers["gene"][0]
+            genename = kb.gene_name_adjust(genename)
+            if genename == "CO1":
+                if i == 1:
+                    print(
+                        Back.LIGHTBLACK_EX
+                        + Fore.RED
+                        + Style.BRIGHT
+                        + "Warning!! 처음부터 COX1이 시작함 & 확인필요"
+                        + Style.RESET_ALL
+                    )
+                    LOG.append("Warning Start from COX1 & Confirm")
+                if feature.strand == 1:
+                    print(
+                        Back.LIGHTBLACK_EX
+                        + Fore.BLUE
+                        + Style.BRIGHT
+                        + f"{genename},'Positive 찾음'",
+                        Style.RESET_ALL,
+                    )
+                    st_p = feature.location.start.position
+                    gene_seq = str(
+                        feature.location.extract(record).seq
+                    )
+                    seqq = seq[st_p:] + seq[:st_p]
+                    break
+
+                elif feature.strand == -1:
+                    rc = record.reverse_complement(
+                        annotations=record.annotations
+                    )
+                    re_seq = rc.seq
+                    for re_feature in rc.features:
+                        if re_feature.type == "CDS":
+                            genename = re_feature.qualifiers["gene"][
+                                0
+                            ]
+                            genename = kb.gene_name_adjust(genename)
+                            if genename == "CO1":
+                                if re_feature.strand == 1:
+                                    print(
+                                        Back.LIGHTBLACK_EX
+                                        + Fore.BLUE
+                                        + Style.BRIGHT
+                                        + f"{genename},'Negative 찾음'",
+                                        Style.RESET_ALL,
+                                    )
+                                    st_p = (
+                                        re_feature.location.start.position
+                                    )
+                                    gene_seq = str(
+                                        re_feature.location.extract(
+                                            rc
+                                        ).seq
+                                    )
+                                    seqq = (
+                                        re_seq[st_p:] + re_seq[:st_p]
+                                    )
+
+    fn = open("./" + fname + "_aranged.fasta", "w")
+    fn.write(f">{fid}\n")
+    fn.write(str(seqq))
+    fn.close()
+    # * COXI 정렬후 밑에 파일로 file 변수 교체
+    # * COXI 되있는 경우를 대비해서, 이렇게 해둠
+    # * COX_ar 안하면 원래 파일로 게산함
+    file = fname + "_aranged.fasta"
+
+# * Step 4 Annotation 다시 함~
+print(
+    Back.LIGHTBLACK_EX + Fore.BLUE + Style.BRIGHT,
+    "mitofinder 재시작, COX1을 시작으로 annotation 실행 " + Style.RESET_ALL,
+)
+OUTPUT = subprocess.call(
+    [
+        f"mitofinder -j {pn} -a {file} -r {ref_file} -o 5 -p 10 -m 50 -t {tRNA} -n 10"
+    ],
+    shell=True,
+)
+GB_FILE = f"./{pn}/{pn}_MitoFinder_{tRNA}_Final_Results/{pn}_mtDNA_contig.gb"
+record = SeqIO.read(GB_FILE, "genbank")
+seq = record.seq
+GENE_COUNT = 0
+my_PCGS = []
+for feature in record.features:
+    if feature.type == "CDS":
+        GENE_COUNT += 1
+        genename = feature.qualifiers["gene"][0]
+        genename = kb.gene_name_adjust(genename)
+        my_PCGS.append(genename)
+        print(
+            Back.LIGHTBLACK_EX + Fore.BLUE + Style.BRIGHT,
+            "PCG : ",
+            genename,
+            "// 총 개수 : ",
+            GENE_COUNT,
+            Style.RESET_ALL,
+        )
+
+fgname = GB_FILE.split(".gb")[-2]
+
+# * Step 5 endcodon, start codon, 결실 PCGS 찾기
+if GENE_COUNT == 13:
+    print(
+        Back.LIGHTBLACK_EX + Fore.BLUE + Style.BRIGHT,
+        "PCGS 모두 찾음",
+        Style.RESET_ALL,
+    )
+    IS_gene = kb.endcodon_adjust(GB_FILE, 15, 5, CN=False)
+    LOG.append("13 PCGS found")
+else:
+    LOG.append(f"{len(my_PCGS)} PCGS found")
+    for pi, pcg in enumerate(ref_PCGS):
+        if pcg not in my_PCGS:
+            print(
+                Back.LIGHTBLACK_EX
+                + Fore.RED
+                + Style.BRIGHT
+                + f"{pcg} 못찾음, genefinder 실행",
+                Style.RESET_ALL,
+            )
+            LOG.append(f"{pcg} not found")
+            for feature in record.features:
+                if feature.type == "CDS":
+                    genename = feature.qualifiers["gene"][0]
+                    genename = kb.gene_name_adjust(genename)
+                    if genename == ref_PCGS[pi - 1]:
+                        posi0 = feature.location.end.position
+                        continue
+                    if genename == ref_PCGS[pi + 1]:
+                        posi1 = feature.location.end.position
+                        break
+            if args.g != "False":
+                posi0 = pog0
+                posi1 = pog1
+            gap = posi1 - posi0
+            LOG.append(f"{pcg} found using align method")
+            print(
+                Back.LIGHTBLACK_EX
+                + Fore.BLUE
+                + Style.BRIGHT
+                + f"Gap = {gap}",
+                Style.RESET_ALL,
+            )
+            if gap < 0:
+                print(
+                    Back.LIGHTBLACK_EX
+                    + Fore.BLUE
+                    + Style.BRIGHT
+                    + " Gene 위치가 이상함 확인 필요 "
+                    + Style.RESET_ALL
+                )
+                LOG.append(f"Gene position error ({gap})")
+                LOG.append("Confirm & input manually")
+                sys.exit()
+            out = GB_FILE.split(".gb")[-2] + ".gb"
+            a, b, c = kb.genefinder(
+                GB_FILE,
+                ref_path,
+                pcg,
+                posi0,
+                posi1,
+                strand=ref_strand[pi],
+                out=out,
+            )
+            GB_FILE = out
+            IS_gene = kb.endcodon_adjust(GB_FILE, 15, 5, CN=False)
+
+if len(IS_gene) != 0:
+    print(
+        Back.LIGHTBLACK_EX
+        + Fore.RED
+        + Style.BRIGHT
+        + "개시 코돈 이상함, 수정 필요"
+        + Style.RESET_ALL
+    )
+    LOG.append(f"Start Codon Strange, {IS_gene}")
+    kb.startcodon_adjust(GB_FILE, gene=IS_gene)
+    LOG.append("Complete revise the start codon")
+    kb.endcodon_adjust(GB_FILE, 15, 5, CN=False)
+    LOG.append("endcodon_adjust")
+
+ftran = open(f"./{pn}/{pn}_{tRNA}/{pn}_mtDNA_contig.{tRNA}", "r")
+lines = ftran.readlines()
+ftran.close()
+num = len(lines) - 1
+ftmp = open("./tmp/tmp_arwen/tmp_mtDNA_contig.arwen", "r")
+lines = ftmp.readlines()
+ftmp.close()
+num2 = len(lines) - 2
+
+LOG.append(f"tRNA : {tRNA}, hits : {num}, tmp : {num2}")
+
+flog = open("./log", "w")
+for l in LOG:
+    print(l)
+    flog.write(f"{l}\n")
+flog.close()
